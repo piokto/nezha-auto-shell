@@ -3,12 +3,6 @@
 # 哪吒面板 Nginx 反向代理一键配置脚本
 # 功能：域名解析检测 + acme.sh SSL证书申请 + 反向代理配置
 
-# 确保脚本在交互模式下运行
-if [ ! -t 0 ]; then
-    echo "错误：此脚本必须在交互式终端中运行"
-    exit 1
-fi
-
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -403,6 +397,25 @@ show_completion() {
     echo ""
 }
 
+# 读取输入（兼容管道和终端）
+read_input() {
+    local prompt=$1
+    local default=$2
+    local result
+    
+    if [[ -t 0 ]]; then
+        # 交互式终端
+        read -r -p "$prompt" result
+    else
+        # 非交互式（从管道）
+        echo "$prompt" >&2
+        read -r result
+    fi
+    
+    result=$(echo "$result" | xargs)
+    echo "${result:-$default}"
+}
+
 # 主函数
 main() {
     show_banner
@@ -419,8 +432,7 @@ main() {
     # 输入域名
     DOMAIN=""
     while [[ -z "$DOMAIN" ]]; do
-        read -r -p "请输入域名 (如 dashboard.example.com): " DOMAIN
-        DOMAIN=$(echo "$DOMAIN" | xargs)  # 去除空格
+        DOMAIN=$(read_input "请输入域名 (如 dashboard.example.com): " "")
         
         if [[ -z "$DOMAIN" ]]; then
             log_error "域名不能为空"
@@ -439,7 +451,7 @@ main() {
         fi
         
         echo ""
-        read -r -p "域名解析不正确，是否继续? (y/n): " continue_choice
+        continue_choice=$(read_input "域名解析不正确，是否继续? (y/n): " "n")
         if [[ "$continue_choice" == "y" ]]; then
             log_warn "跳过解析检查"
             break
@@ -448,15 +460,13 @@ main() {
     done
     
     echo ""
-    read -r -p "哪吒面板端口 [8008]: " NEZHA_PORT
-    NEZHA_PORT=${NEZHA_PORT:-8008}
+    NEZHA_PORT=$(read_input "哪吒面板端口 [8008]: " "8008")
     
     echo ""
     echo "SSL 证书:"
     echo "1) 自动申请 (推荐)"
     echo "2) 已有证书"
-    read -r -p "选择 [1]: " ssl_choice
-    ssl_choice=${ssl_choice:-1}
+    ssl_choice=$(read_input "选择 [1]: " "1")
     
     echo ""
     if [[ "$ssl_choice" == "1" ]]; then
@@ -466,8 +476,8 @@ main() {
             exit 1
         fi
     else
-        read -r -p "证书路径: " SSL_CERT
-        read -r -p "私钥路径: " SSL_KEY
+        SSL_CERT=$(read_input "证书路径: " "")
+        SSL_KEY=$(read_input "私钥路径: " "")
         
         if [[ ! -f "$SSL_CERT" ]] || [[ ! -f "$SSL_KEY" ]]; then
             log_error "证书文件不存在"
@@ -479,8 +489,7 @@ main() {
     detect_nginx_version
     
     echo ""
-    read -r -p "是否使用 CDN? (y/n) [n]: " use_cdn
-    use_cdn=${use_cdn:-n}
+    use_cdn=$(read_input "是否使用 CDN? (y/n) [n]: " "n")
     
     cdn_header="CF-Connecting-IP"
     cdn_range="0.0.0.0/0"
@@ -489,19 +498,16 @@ main() {
         echo ""
         echo "1) CloudFlare"
         echo "2) 其他 CDN"
-        read -r -p "选择 [1]: " cdn_type
-        cdn_type=${cdn_type:-1}
+        cdn_type=$(read_input "选择 [1]: " "1")
         
         if [[ "$cdn_type" == "2" ]]; then
-            read -r -p "Header 名称: " cdn_header
-            read -r -p "IP 段 [0.0.0.0/0]: " input_range
-            cdn_range=${input_range:-0.0.0.0/0}
+            cdn_header=$(read_input "Header 名称: " "CF-Connecting-IP")
+            cdn_range=$(read_input "IP 段 [0.0.0.0/0]: " "0.0.0.0/0")
         fi
     fi
     
     echo ""
-    read -r -p "Nginx 是否最外层? (y/n) [n]: " outermost
-    outermost=${outermost:-n}
+    outermost=$(read_input "Nginx 是否最外层? (y/n) [n]: " "n")
     
     echo ""
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
